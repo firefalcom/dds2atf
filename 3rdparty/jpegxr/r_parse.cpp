@@ -50,6 +50,13 @@
 # include <memory.h>
 # include <assert.h>
 
+#undef assert
+
+void assert( bool )
+{
+
+}
+
 static int r_image_header(jxr_image_t image, struct rbitstream*str);
 static int r_image_plane_header(jxr_image_t image, struct rbitstream*str, int alpha);
 static int r_INDEX_TABLE(jxr_image_t image, struct rbitstream*str);
