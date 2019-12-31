@@ -1,6 +1,7 @@
 CXX:=g++
 CC:=gcc
-CCPARAMS:=-Os
+CCPARAMS:=-O0 -g
+CXXPARAMS:=-std=c++17
 
 INCLUDES=-I3rdparty/jpegxr -I3rdparty/lzma
 
@@ -16,11 +17,18 @@ LZMA_OBJ=$(LZMA_SRC:.c=.o)
 
 .cpp.o:
 	@echo CXX $<
-	@$(CXX) $(CCPARAMS) $(INCLUDES) $(DEFINES) -c $< -o $@
-	
-all: $(JPEGXR_OBJ) $(LZMA_OBJ) dds2atf.o pvr2atfcore.o
+	@$(CXX) $(CCPARAMS) $(CXXPARAMS) $(INCLUDES) $(DEFINES) -c $< -o $@
+
+atf-transform: $(LZMA_OBJ) atf-transform.o
+	mkdir -p bin
+	$(CXX) atf-transform.o 3rdparty/*/*.o -o bin/atf-transform
+
+dds2atf: $(JPEGXR_OBJ) $(LZMA_OBJ) dds2atf.o pvr2atfcore.o
 	mkdir -p bin
 	$(CXX) dds2atf.o pvr2atfcore.o 3rdparty/*/*.o -o bin/dds2atf
+
+all : dds2atf atf-transform
+
 
 clean:
 	rm -f bin/dds2atf *.o 3rdparty/*/*.o
