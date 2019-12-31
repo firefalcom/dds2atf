@@ -19,7 +19,7 @@ LZMA_OBJ=$(LZMA_SRC:.c=.o)
 	@echo CXX $<
 	@$(CXX) $(CCPARAMS) $(CXXPARAMS) $(INCLUDES) $(DEFINES) -c $< -o $@
 
-atf-transform: $(LZMA_OBJ) atf-transform.o
+atf-transform: $(LZMA_OBJ) $(JPEGXR_OBJ) atf-transform.o
 	mkdir -p bin
 	$(CXX) atf-transform.o 3rdparty/*/*.o -o bin/atf-transform
 
