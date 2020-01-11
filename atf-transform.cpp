@@ -39,7 +39,7 @@ bool decodeData( const unsigned char * src, int & index, int version, char * des
 {
     int source_size;
 
-    if( version == 3 )
+    if( version != 0 )
     {
         source_size = ( src[ index ] << 24 ) + ( src[ index + 1 ] << 16 ) + ( src[ index + 2 ] << 8 ) + src[ index + 3 ];
         index += 4;
@@ -91,7 +91,7 @@ bool decodeJpegXR(const unsigned char * src, int & index, int version, char * de
 {
     int source_size;
 
-    if( version == 3 )
+    if( version != 0 )
     {
         source_size = ( src[ index ] << 24 ) + ( src[ index + 1 ] << 16 ) + ( src[ index + 2 ] << 8 ) + src[ index + 3 ];
         index += 4;
@@ -113,26 +113,46 @@ bool decodeJpegXR(const unsigned char * src, int & index, int version, char * de
     jxr_set_user_data(image, destination);
 
     jxr_set_block_output(image,[](jxr_image_t image, int mx, int my, int*data){
-        uint16_t * image_data = reinterpret_cast<uint16_t*>( jxr_get_user_data(image) );
         int32_t w = jxr_get_IMAGE_WIDTH(image);
         int32_t h = jxr_get_IMAGE_HEIGHT(image);
         int32_t n = jxr_get_IMAGE_CHANNELS(image);
-        for ( int32_t y=0; y<16; y++) {
-            int32_t dy = (my*16) + y;
-            for ( int32_t x=0; x<16; x++) {
-                int32_t dx = (mx*16) + x;
-                if ( dy < h && dx < w ) {
 
-                    int pixel_index = y*16 + x;
+        if( n == 1 )
+        {
 
-                    int r = data[ pixel_index * n + 2 ] & 0x1F;
-                    int g = data[ pixel_index * n + 1 ] & 0x3F;
-                    int b = data[ pixel_index * n + 0 ] & 0x1F;
+            auto image_data = reinterpret_cast<uint8_t*>( jxr_get_user_data(image) );
+            for ( int32_t y=0; y<16; y++) {
+                int32_t dy = (my*16) + y;
+                for ( int32_t x=0; x<16; x++) {
+                    int32_t dx = (mx*16) + x;
+                    if ( dy < h && dx < w ) {
 
-                    image_data[ dy * w + dx ] =
-                          (r << 11)
-                        | (g <<  5)
-                        |  b;
+                        int pixel_index = y*16 + x;
+                        image_data[ dy * w + dx ] = data[ pixel_index ];
+                    }
+                }
+            }
+        }
+        else
+        {
+            auto image_data = reinterpret_cast<uint16_t*>( jxr_get_user_data(image) );
+            for ( int32_t y=0; y<16; y++) {
+                int32_t dy = (my*16) + y;
+                for ( int32_t x=0; x<16; x++) {
+                    int32_t dx = (mx*16) + x;
+                    if ( dy < h && dx < w ) {
+
+                        int pixel_index = y*16 + x;
+
+                        int r = data[ pixel_index * n + 2 ] & 0x1F;
+                        int g = data[ pixel_index * n + 1 ] & 0x3F;
+                        int b = data[ pixel_index * n + 0 ] & 0x1F;
+
+                        image_data[ dy * w + dx ] =
+                            (r << 11)
+                            | (g <<  5)
+                            |  b;
+                    }
                 }
             }
         }
@@ -224,12 +244,21 @@ int main(int argc, char *argv[]) {
 
         if( src[ index + 6 ] == 255 )
         {
-            index += 6;
+            version = src[index + 7];
 
-            version = 3;
+            index += 6;
         }
 
-        int size = ( src[ index + 3 ] << 16 ) + ( src[ index + 4 ] << 8 ) + src[ index + 5 ];
+        int size;
+
+        if( version == 0 )
+        {
+            size = ( src[ index + 3 ] << 16 ) + ( src[ index + 4 ] << 8 ) + src[ index + 5 ];
+        }
+        else
+        {
+            size = ( src[ index + 2 ] << 24 ) + ( src[ index + 3 ] << 16 ) + ( src[ index + 4 ] << 8 ) + src[ index + 5 ];
+        }
 
         ofile.put('A');
         ofile.put('T');
@@ -370,13 +399,12 @@ int main(int argc, char *argv[]) {
                 int color_bit_size = block_count * 4; // 4 bytes of interpolation
 
                 auto bits = reinterpret_cast<uint32_t*>( dest );
+                uint16_t *cl0 = reinterpret_cast<uint16_t*>( dest + color_bit_size );
+                uint16_t *cl1 = cl0 + block_count;
+
                 auto alpha_bits = reinterpret_cast<uint8_t*>( dest_alpha );
-
-                uint16_t *cl0 = reinterpret_cast<uint16_t*>( bits + color_bit_size );
-                uint16_t *cl1 = cl0 + (color_base_size / 4);
-
                 uint8_t *a0 = reinterpret_cast<uint8_t*>( alpha_bits + alpha_bit_size );
-                uint8_t *a1 = a0 + alpha_base_size;
+                uint8_t *a1 = a0 + block_count;
 
                 //Alpha
                 int output_size = alpha_bit_size;
@@ -436,13 +464,20 @@ int main(int argc, char *argv[]) {
                     ofile.put(uint8_t(0));
                 }
 
-                skip_image_count = 12;
+                if( version == 3 )
+                {
+                    skip_image_count = 12;
+                }
+                else
+                {
+                    skip_image_count = 6;
+                }
             }
 
             for( int i = 0; i< skip_image_count; ++i) //Skip other format (only dxt1)
             {
                 int source_size_2;
-                if( version == 3 )
+                if( version != 0 )
                 {
                     source_size_2 = ( src[ index ] << 24 ) + ( src[ index + 1 ] << 16 ) + ( src[ index + 2 ] << 8 ) + src[ index + 3 ];
                     index += 4 + source_size_2;
