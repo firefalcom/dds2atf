@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
         uint8_t *src = new uint8_t [filesize];
         ifile.read((char *)src,filesize);
 
-        int index;
+        int index{0};
 
         if( src[ 0 ] == 1 )
         {
